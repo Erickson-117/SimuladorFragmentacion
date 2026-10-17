@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemSim Lab - Simulador de Fragmentación de Memoria</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --accent-color: #38bdf8;
+            --accent-hover: #0284c7;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --color-occupied: #ef4444;
+            --color-free: #10b981;
+            --color-wasted: #f59e0b;
+            --border-radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-main); line-height: 1.6; padding: 20px; }
+        header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid var(--bg-card); padding-bottom: 15px; }
+        header h1 { font-size: 2.2rem; color: var(--accent-color); }
+        header p { color: var(--text-muted); }
+
+        nav { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
+        .nav-btn { background: var(--bg-card); color: var(--text-main); border: none; padding: 10px 20px; border-radius: var(--border-radius); cursor: pointer; transition: all 0.3s ease; font-weight: 600; }
+        .nav-btn.active, .nav-btn:hover { background: var(--accent-color); color: #000; }
+
+        .tab-content { display: none; background: var(--bg-secondary); padding: 25px; border-radius: var(--border-radius); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .tab-content.active { display: block; }
+
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 900px) { .grid-layout { grid-template-columns: 1fr; } }
+
+        .control-panel, .display-panel { background: var(--bg-card); padding: 20px; border-radius: var(--border-radius); }
+        h2 { color: var(--accent-color); margin-bottom: 15px; font-size: 1.4rem; border-bottom: 1px solid var(--text-muted); padding-bottom: 5px; }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: var(--text-muted); }
+        input, select { width: 100%; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--text-muted); background: var(--bg-primary); color: var(--text-main); }
+        
+        .btn { background: var(--accent-color); color: #000; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        .btn:hover { background: var(--accent-hover); color: #fff; }
+        .btn-danger { background: var(--color-occupied); color: #fff; }
+        .btn-warning { background: var(--color-wasted); color: #000; }
+
+        .kpi-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .kpi-card { flex: 1; min-width: 120px; background: var(--bg-primary); padding: 12px; border-radius: 6px; text-align: center; }
+        .kpi-card .val { font-size: 1.4rem; font-weight: bold; color: var(--accent-color); }
+        .kpi-card .lbl { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Memory Visualizer */
+        .memory-visualizer { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; background: var(--bg-primary); padding: 15px; border-radius: 6px; }
+        .partition-block { border: 2px dashed var(--text-muted); border-radius: 6px; padding: 10px; position: relative; }
+        .partition-block.occupied { border-style: solid; border-color: var(--color-occupied); }
+        
+        .partition-fill { display: flex; height: 35px; border-radius: 4px; overflow: hidden; background: #475569; }
+        .fill-used { background: var(--color-occupied); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; color: white; }
+        .fill-internal-wasted { background: var(--color-wasted); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; color: black; }
+        .fill-free { background: var(--color-free); width: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: bold; color: black; }
+
+        /* Dynamic Memory Blocks */
+        .dynamic-memory-bar { display: flex; width: 100%; height: 50px; background: var(--bg-primary); border-radius: 6px; overflow: hidden; border: 1px solid var(--text-muted); margin-top: 15px; }
+        .dyn-block { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; border-right: 1px solid var(--bg-primary); transition: all 0.3s; }
+        .dyn-block.occupied { background: var(--color-occupied); color: white; }
+        .dyn-block.free { background: var(--color-free); color: black; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid var(--bg-card); padding: 10px; text-align: left; }
+        th { background: var(--bg-primary); color: var(--accent-color); }
+
+        .quiz-option { display: block; margin: 8px 0; background: var(--bg-primary); padding: 10px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; }
+        .quiz-option:hover { border-color: var(--accent-color); }
+        .feedback { margin-top: 10px; padding: 10px; border-radius: 4px; display: none; font-size: 0.9rem; }
+        .feedback.correct { background: #065f46; color: #a7f3d0; }
+        .feedback.incorrect { background: #991b1b; color: #fecaca; }
+
+        .formula-box { background: var(--bg-primary); border-left: 4px solid var(--color-wasted); padding: 10px; margin: 10px 0; font-family: monospace; }
+        .alert-box { background: #854d0e; color: #fef08a; padding: 10px; border-radius: 4px; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>MemSim Lab</h1>
+        <p>Simulador Educativo de Fragmentación Interna y Externa en Sistemas Operativos</p>
+    </header>
+
+    <nav>
+        <button class="nav-btn active" onclick="switchTab('internal-tab')">1. Fragmentación Interna</button>
+        <button class="nav-btn" onclick="switchTab('external-tab')">2. Fragmentación Externa</button>
+        <button class="nav-btn" onclick="switchTab('compare-tab')">3. Comparativa</button>
+        <button class="nav-btn" onclick="switchTab('quiz-tab')">4. Evaluaciones y Retos</button>
+    </nav>
+
+    <!-- TAB 1: FRAGMENTACIÓN INTERNA -->
+    <div id="internal-tab" class="tab-content active">
+        <div class="grid-layout">
+            <div class="control-panel">
+                <h2>Asignación por Particiones Fijas</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
+                    En la asignación fija, la memoria se divide en particiones de tamaño constante. Si un proceso requiere menos memoria que la partición, el sobrante se desperdicia internamente.
+                </p>
+
+                <div class="form-group">
+                    <label>Tamaño Total Memoria (KB):</label>
+                    <input type="number" id="int-total-mem" value="40" min="10" step="10">
+                </div>
+                <div class="form-group">
+                    <label>Tamaño de Cada Partición Fija (KB):</label>
+                    <input type="number" id="int-part-size" value="10" min="2">
+                </div>
+                <button class="btn" onclick="setupInternalMemory()">Configurar Memoria</button>
+
+                <hr style="margin: 20px 0; border-color: var(--bg-secondary);">
+
+                <h3>Agregar Proceso</h3>
+                <div class="form-group">
+                    <label>Nombre del Proceso:</label>
+                    <input type="text" id="int-proc-name" placeholder="Ej: Proceso A">
+                </div>
+                <div class="form-group">
+                    <label>Memoria Solicitada (KB):</label>
+                    <input type="number" id="int-proc-size" value="6" min="1">
+                </div>
+                <button class="btn" onclick="addInternalProcess()">Asignar Proceso</button>
+                <button class="btn btn-danger" onclick="resetInternalMemory()">Reiniciar</button>
+
+                <div class="formula-box">
+                    Fragmentación Interna = Memoria Asignada − Memoria Solicitada
+                </div>
+                <div id="int-alert" class="alert-box"></div>
+            </div>
+
+            <div class="display-panel">
+                <h2>Estado de Particiones Fijas</h2>
+                <div class="kpi-container">
+                    <div class="kpi-card"><div class="val" id="int-kpi-total">40 KB</div><div class="lbl">Memoria Total</div></div>
+                    <div class="kpi-card"><div class="val" id="int-kpi-used">0 KB</div><div class="lbl">Solicitada Total</div></div>
+                    <div class="kpi-card"><div class="val" id="int-kpi-wasted" style="color:var(--color-wasted)">0 KB</div><div class="lbl">Frag. Interna Total</div></div>
+                </div>
+
+                <div id="internal-visualizer" class="memory-visualizer">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: FRAGMENTACIÓN EXTERNA -->
+    <div id="external-tab" class="tab-content">
+        <div class="grid-layout">
+            <div class="control-panel">
+                <h2>Asignación Dinámica (First Fit)</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
+                    En la asignación dinámica, los procesos reciben exactamente el tamaño contiguo solicitado. Al liberar memoria, quedan "huecos" dispersos.
+                </p>
+
+                <div class="form-group">
+                    <label>Tamaño Total de Memoria RAM (KB):</label>
+                    <input type="number" id="ext-total-mem" value="20" min="10">
+                </div>
+                <button class="btn" onclick="setupExternalMemory()">Inicializar Memoria</button>
+
+                <hr style="margin: 20px 0; border-color: var(--bg-secondary);">
+
+                <h3>Crear / Asignar Proceso</h3>
+                <div class="form-group">
+                    <label>Nombre Proceso:</label>
+                    <input type="text" id="ext-proc-name" placeholder="Ej: Proceso X">
+                </div>
+                <div class="form-group">
+                    <label>Tamaño Solicitado (KB):</label>
+                    <input type="number" id="ext-proc-size" value="4" min="1">
+                </div>
+                <button class="btn" onclick="addExternalProcess()">Asignar (First Fit)</button>
+                <button class="btn btn-warning" onclick="compactExternalMemory()">Simular Compactación</button>
+                <button class="btn btn-danger" onclick="setupExternalMemory()">Reiniciar</button>
+
+                <hr style="margin: 20px 0; border-color: var(--bg-secondary);">
+                <h3>Ejemplo Obligatorio de Prueba</h3>
+                <button class="btn" style="background:#a855f7; color:white;" onclick="loadMandatoryExternalScenario()">Cargar Escenario (3 huecos de 4KB)</button>
+
+                <div id="ext-alert" class="alert-box"></div>
+            </div>
+
+            <div class="display-panel">
+                <h2>Mapa Continuo de Memoria</h2>
+                <div class="kpi-container">
+                    <div class="kpi-card"><div class="val" id="ext-kpi-total">20 KB</div><div class="lbl">Memoria Total</div></div>
+                    <div class="kpi-card"><div class="val" id="ext-kpi-free">20 KB</div><div class="lbl">Libre Total</div></div>
+                    <div class="kpi-card"><div class="val" id="ext-kpi-maxblock">20 KB</div><div class="lbl">Bloque Libre Mayor</div></div>
+                </div>
+
+                <div id="dynamic-memory-bar" class="dynamic-memory-bar">
+                    <!-- Visualizador lineal -->
+                </div>
+
+                <h3 style="margin-top: 20px;">Tabla de Bloques de Memoria</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Dirección (Inicio - Fin)</th>
+                            <th>Estado / Proceso</th>
+                            <th>Tamaño</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ext-table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: COMPARATIVA -->
+    <div id="compare-tab" class="tab-content">
+        <h2>Comparativa: Fragmentación Interna vs. Externa</h2>
+        <p style="margin-bottom: 20px; color: var(--text-muted);">
+            Resumen técnico de las características clave entre ambos tipos de degradación de memoria.
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Criterio</th>
+                    <th>Fragmentación Interna</th>
+                    <th>Fragmentación Externa</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Esquema de Asignación</strong></td>
+                    <td>Particiones Fijas / Paginación.</td>
+                    <td>Asignación Contigua Dinámica / Segmentación.</td>
+                </tr>
+                <tr>
+                    <td><strong>Causa Principal</strong></td>
+                    <td>Asignar un bloque de tamaño fijo mayor que el solicitado por el proceso.</td>
+                    <td>Carga y liberación alternada de procesos con distintos tamaños en el tiempo.</td>
+                </tr>
+                <tr>
+                    <td><strong>Ubicación del Desperdicio</strong></td>
+                    <td>Dentro de las particiones o páginas ya asignadas.</td>
+                    <td>Fuera de los bloques asignados (entre bloques ocupados).</td>
+                </tr>
+                <tr>
+                    <td><strong>Ejemplo Típico</strong></td>
+                    <td>Proceso requiere 6 KB en una partición fija de 10 KB (desperdicia 4 KB).</td>
+                    <td>Hay 12 KB libres totales en 3 bloques de 4 KB, pero un proceso de 8 KB falla por falta de contigüidad.</td>
+                </tr>
+                <tr>
+                    <td><strong>Mecanismo de Solución</strong></td>
+                    <td>Reducir tamaño de página/partición, o usar asignación dinámica.</td>
+                    <td>Compactación de memoria o habilitar memoria no contigua (Paginación/Segmentación).</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- TAB 4: QUIZ Y RETOS -->
+    <div id="quiz-tab" class="tab-content">
+        <h2>Evaluación Interactiva (5 Preguntas)</h2>
+        <div id="quiz-container">
+            <!-- Preguntas generadas con JS -->
+        </div>
+
+        <h2 style="margin-top: 30px;">Retos Prácticos</h2>
+        <div class="control-panel" style="margin-bottom: 15px;">
+            <h3>Reto 1: Generar Fragmentación Interna Crítica</h3>
+            <p>Configura particiones de 16 KB e inserta 3 procesos de 1 KB. Observa cuánto espacio se desperdicia en total.</p>
+        </div>
+        <div class="control-panel" style="margin-bottom: 15px;">
+            <h3>Reto 2: El Dilema de la Fragmentación Externa</h3>
+            <p>Carga el escenario obligatorio de Fragmentación Externa en la Pestaña 2 e intenta asignar un proceso de 8 KB. Examina el mensaje del sistema.</p>
+        </div>
+        <div class="control-panel">
+            <h3>Reto 3: Eliminando la Fragmentación Externa</h3>
+            <p>Tras fallar el Reto 2, presiona el botón "Simular Compactación" y reintenta la asignación del proceso de 8 KB.</p>
+        </div>
+    </div>
+
+    <script>
+        // TAB NAVIGATION
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function showAlert(elemId, msg) {
+            const el = document.getElementById(elemId);
+            el.innerText = msg;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 6000);
+        }
+
+        // ==========================================
+        // MODULE 1: INTERNAL FRAGMENTATION LOGIC
+        // ==========================================
+        let intTotalMem = 40;
+        let intPartSize = 10;
+        let intPartitions = []; // { id, size, process: { name, reqSize } | null }
+
+        function setupInternalMemory() {
+            intTotalMem = parseInt(document.getElementById('int-total-mem').value);
+            intPartSize = parseInt(document.getElementById('int-part-size').value);
+
+            if (intPartSize > intTotalMem || intPartSize <= 0) {
+                showAlert('int-alert', 'El tamaño de la partición no es válido.');
+                return;
+            }
+
+            const numParts = Math.floor(intTotalMem / intPartSize);
+            intPartitions = [];
+            for (let i = 0; i < numParts; i++) {
+                intPartitions.push({ id: i + 1, size: intPartSize, process: null });
+            }
+            renderInternalMemory();
+        }
+
+        function addInternalProcess() {
+            const name = document.getElementById('int-proc-name').value.trim() || `Proc_${Date.now().toString().slice(-3)}`;
+            const reqSize = parseInt(document.getElementById('int-proc-size').value);
+
+            if (reqSize > intPartSize) {
+                showAlert('int-alert', `Error: El proceso (${reqSize} KB) supera el tamaño máximo de partición (${intPartSize} KB).`);
+                return;
+            }
+
+            const freePart = intPartitions.find(p => p.process === null);
+            if (!freePart) {
+                showAlert('int-alert', 'Error: No hay particiones libres disponibles.');
+                return;
+            }
+
+            freePart.process = { name, reqSize };
+            document.getElementById('int-proc-name').value = '';
+            renderInternalMemory();
+        }
+
+        function removeInternalProcess(partId) {
+            const part = intPartitions.find(p => p.id === partId);
+            if (part) part.process = null;
+            renderInternalMemory();
+        }
+
+        function resetInternalMemory() {
+            setupInternalMemory();
+        }
+
+        function renderInternalMemory() {
+            const vis = document.getElementById('internal-visualizer');
+            vis.innerHTML = '';
+
+            let totalReq = 0;
+            let totalWasted = 0;
+
+            intPartitions.forEach(p => {
+                const pEl = document.createElement('div');
+                pEl.className = `partition-block ${p.process ? 'occupied' : ''}`;
+
+                if (p.process) {
+                    const wasted = p.size - p.process.reqSize;
+                    totalReq += p.process.reqSize;
+                    totalWasted += wasted;
+
+                    const usedPct = (p.process.reqSize / p.size) * 100;
+                    const wastedPct = (wasted / p.size) * 100;
+
+                    pEl.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:5px;">
+                            <span><strong>Partición ${p.id}</strong> (${p.size} KB) - Proc: <strong>${p.process.name}</strong></span>
+                            <button class="btn btn-danger" style="padding:2px 6px; font-size:0.7rem;" onclick="removeInternalProcess(${p.id})">Liberar</button>
+                        </div>
+                        <div class="partition-fill">
+                            <div class="fill-used" style="width:${usedPct}%">Solicitado: ${p.process.reqSize} KB</div>
+                            ${wasted > 0 ? `<div class="fill-internal-wasted" style="width:${wastedPct}\%">Frag: ${wasted} KB</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    pEl.innerHTML = `
+                        <div style="font-size:0.85rem; margin-bottom:5px;"><strong>Partición ${p.id}</strong> (${p.size} KB) - <em>LIBRE</em></div>
+                        <div class="partition-fill"><div class="fill-free">Disponible (100%)</div></div>
+                    `;
+                }
+                vis.appendChild(pEl);
+            });
+
+            document.getElementById('int-kpi-total').innerText = `${intTotalMem} KB`;
+            document.getElementById('int-kpi-used').innerText = `${totalReq} KB`;
+            document.getElementById('int-kpi-wasted').innerText = `${totalWasted} KB`;
+        }
+
+        // ==========================================
+        // MODULE 2: EXTERNAL FRAGMENTATION LOGIC
+        // ==========================================
+        let extTotalMem = 20;
+        let extBlocks = []; // { id, start, size, isFree, processName }
+
+        function setupExternalMemory() {
+            extTotalMem = parseInt(document.getElementById('ext-total-mem').value);
+            extBlocks = [{ id: 1, start: 0, size: extTotalMem, isFree: true, processName: null }];
+            renderExternalMemory();
+        }
+
+        function addExternalProcess() {
+            const name = document.getElementById('ext-proc-name').value.trim() || `P_${Date.now().toString().slice(-3)}`;
+            const reqSize = parseInt(document.getElementById('ext-proc-size').value);
+
+            if (reqSize <= 0) return;
+
+            // First Fit Strategy
+            const freeBlockIdx = extBlocks.findIndex(b => b.isFree && b.size >= reqSize);
+
+            if (freeBlockIdx === -1) {
+                const totalFree = extBlocks.filter(b => b.isFree).reduce((sum, b) => sum + b.size, 0);
+                const maxFree = Math.max(...extBlocks.filter(b => b.isFree).map(b => b.size), 0);
+
+                if (totalFree >= reqSize && maxFree < reqSize) {
+                    showAlert('ext-alert', `¡FRAGMENTACIÓN EXTERNA DETECTADA! La memoria libre total es de ${totalFree} KB, pero el bloque contiguo mayor disponible es de solo ${maxFree} KB. No se puede asignar el proceso "${name}" de ${reqSize} KB.`);
+                } else {
+                    showAlert('ext-alert', `Espacio insuficiente: La memoria libre total (${totalFree} KB) es menor a la requerida (${reqSize} KB).`);
+                }
+                return;
+            }
+
+            const block = extBlocks[freeBlockIdx];
+            if (block.size === reqSize) {
+                block.isFree = false;
+                block.processName = name;
+            } else {
+                const newOccupied = {
+                    id: Date.now(),
+                    start: block.start,
+                    size: reqSize,
+                    isFree: false,
+                    processName: name
+                };
+                const newFree = {
+                    id: Date.now() + 1,
+                    start: block.start + reqSize,
+                    size: block.size - reqSize,
+                    isFree: true,
+                    processName: null
+                };
+                extBlocks.splice(freeBlockIdx, 1, newOccupied, newFree);
+            }
+
+            document.getElementById('ext-proc-name').value = '';
+            renderExternalMemory();
+        }
+
+        function freeExternalBlock(blockId) {
+            const idx = extBlocks.findIndex(b => b.id === blockId);
+            if (idx !== -1) {
+                extBlocks[idx].isFree = true;
+                extBlocks[idx].processName = null;
+                mergeAdjacentFreeBlocks();
+                renderExternalMemory();
+            }
+        }
+
+        function mergeAdjacentFreeBlocks() {
+            for (let i = 0; i < extBlocks.length - 1; i++) {
+                if (extBlocks[i].isFree && extBlocks[i + 1].isFree) {
+                    extBlocks[i].size += extBlocks[i + 1].size;
+                    extBlocks.splice(i + 1, 1);
+                    i--;
+                }
+            }
+        }
+
+        function compactExternalMemory() {
+            let occupiedBlocks = extBlocks.filter(b => !b.isFree);
+            let totalFree = extBlocks.filter(b => b.isFree).reduce((sum, b) => sum + b.size, 0);
+
+            if (totalFree === 0) {
+                showAlert('ext-alert', 'No hay espacio libre para compactar.');
+                return;
+            }
+
+            let newBlocks = [];
+            let currentStart = 0;
+
+            occupiedBlocks.forEach(b => {
+                newBlocks.push({
+                    id: b.id,
+                    start: currentStart,
+                    size: b.size,
+                    isFree: false,
+                    processName: b.processName
+                });
+                currentStart += b.size;
+            });
+
+            if (totalFree > 0) {
+                newBlocks.push({
+                    id: Date.now(),
+                    start: currentStart,
+                    size: totalFree,
+                    isFree: true,
+                    processName: null
+                });
+            }
+
+            extBlocks = newBlocks;
+            showAlert('ext-alert', 'Compactación realizada con éxito: Se unificaron los bloques de memoria libre.');
+            renderExternalMemory();
+        }
+
+        function loadMandatoryExternalScenario() {
+            extTotalMem = 20;
+            document.getElementById('ext-total-mem').value = 20;
+            // Escenario: 4KB Libre, 4KB P1, 4KB Libre, 4KB P2, 4KB Libre
+            extBlocks = [
+                { id: 1, start: 0, size: 4, isFree: true, processName: null },
+                { id: 2, start: 4, size: 4, isFree: false, processName: 'Proceso A' },
+                { id: 3, start: 8, size: 4, isFree: true, processName: null },
+                { id: 4, start: 12, size: 4, isFree: false, processName: 'Proceso B' },
+                { id: 5, start: 16, size: 4, isFree: true, processName: null }
+            ];
+            document.getElementById('ext-proc-name').value = 'Proceso Nuevo';
+            document.getElementById('ext-proc-size').value = 8;
+            renderExternalMemory();
+            showAlert('ext-alert', 'Escenario obligatorio cargado: Hay 12 KB libres distribuidos en 3 bloques de 4 KB. Se ha configurado una solicitud de 8 KB.');
+        }
+
+        function renderExternalMemory() {
+            const bar = document.getElementById('dynamic-memory-bar');
+            const tbody = document.getElementById('ext-table-body');
+            bar.innerHTML = '';
+            tbody.innerHTML = '';
+
+            let totalFree = 0;
+            let maxFree = 0;
+
+            extBlocks.forEach(b => {
+                const pct = (b.size / extTotalMem) * 100;
+                
+                // Visual bar element
+                const bEl = document.createElement('div');
+                bEl.className = `dyn-block ${b.isFree ? 'free' : 'occupied'}`;
+                bEl.style.width = `${pct}%`;
+                bEl.innerHTML = `<span>${b.isFree ? 'LIBRE' : b.processName}</span><span>${b.size} KB</span>`;
+                bar.appendChild(bEl);
+
+                // Table element
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>0x${b.start.toString(16).padStart(4, '0')} - 0x${(b.start + b.size - 1).toString(16).padStart(4, '0')}</td>
+                    <td>${b.isFree ? '<span style="color:var(--color-free)">LIBRE</span>' : `<strong>${b.processName}</strong>`}</td>
+                    <td>${b.size} KB</td>
+                    <td>${!b.isFree ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.75rem;" onclick="freeExternalBlock(${b.id})">Liberar</button>` : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+
+                if (b.isFree) {
+                    totalFree += b.size;
+                    if (b.size > maxFree) maxFree = b.size;
+                }
+            });
+
+            document.getElementById('ext-kpi-total').innerText = `${extTotalMem} KB`;
+            document.getElementById('ext-kpi-free').innerText = `${totalFree} KB`;
+            document.getElementById('ext-kpi-maxblock').innerText = `${maxFree} KB`;
+        }
+
+        // ==========================================
+        // MODULE 4: QUIZ DATA AND LOGIC
+        // ==========================================
+        const quizData = [
+            {
+                q: "1. Si un proceso requiere 6 KB de memoria y el sistema operativo lo asigna a una partición fija de 10 KB, ¿cuál es el resultado?",
+                options: ["Fragmentación externa de 4 KB.", "Fragmentación interna de 4 KB.", "Compactación de 4 KB.", "Asignación dinámica fallida."],
+                correct: 1,
+                exp: "La fórmula es: Fragmentación interna = Memoria asignada (10 KB) - Memoria solicitada (6 KB) = 4 KB dentro del bloque."
+            },
+            {
+                q: "2. Ocurre cuando la memoria libre total es suficiente para un proceso, pero se encuentra dividida en bloques dispersos no contiguos:",
+                options: ["Paginación.", "Fragmentación interna.", "Fragmentación externa.", "Desbordamiento de memoria."],
+                correct: 2,
+                exp: "La fragmentación externa surge en esquemas dinámicos contiguos cuando la suma del espacio libre satisface la petición, pero ningún bloque individual es contiguamente amplio."
+            },
+            {
+                q: "3. En un sistema de particiones fijas de 12 KB cada una, se asignan tres procesos con solicitudes de 8 KB, 10 KB y 5 KB. ¿Cuál es la fragmentación interna total?",
+                options: ["13 KB.", "11 KB.", "9 KB.", "15 KB."],
+                correct: 1,
+                exp: "Calculando por partición: (12-8) + (12-10) + (12-5) = 4 KB + 2 KB + 7 KB = 11 KB desperdiciados."
+            },
+            {
+                q: "4. ¿Cuál de las siguientes técnicas ayuda a reducir o erradicar la fragmentación externa?",
+                options: ["Aumentar el tamaño de la memoria ROM.", "Compactación de memoria y paginación.", "Utilizar únicamente particiones fijas grandes.", "Ejecutar menos procesos."],
+                correct: 1,
+                exp: "La compactación traslada los bloques ocupados para unificar espacios libres, mientras que la paginación permite almacenamiento no contiguo."
+            },
+            {
+                q: "5. ¿Por qué la compactación de memoria no se ejecuta de forma continua en los sistemas operativos?",
+                options: ["Porque no está admitida por el software.", "Porque requiere reiniciar la computadora.", "Porque consume un alto costo computacional y tiempo de CPU.", "Porque elimina los archivos del usuario."],
+                correct: 2,
+                exp: "La compactación implica reubicar procesos en RAM y actualizar punteros de registros, lo cual suspende la ejecución y degrada el rendimiento del sistema."
+            }
+        ];
+
+        function initQuiz() {
+            const container = document.getElementById('quiz-container');
+            container.innerHTML = '';
+
+            quizData.forEach((item, idx) => {
+                const qDiv = document.createElement('div');
+                qDiv.className = 'control-panel';
+                qDiv.style.marginBottom = '15px';
+
+                let html = `<p><strong>${item.q}</strong></p>`;
+                item.options.forEach((opt, optIdx) => {
+                    html += `
+                        <label class="quiz-option">
+                            <input type="radio" name="q${idx}" value="${optIdx}" onchange="checkQuiz(${idx}, ${optIdx})">
+                            ${opt}
+                        </label>
+                    `;
+                });
+                html += `<div id="feedback-${idx}" class="feedback"></div>`;
+                qDiv.innerHTML = html;
+                container.appendChild(qDiv);
+            });
+        }
+
+        function checkQuiz(qIdx, selectedOpt) {
+            const fb = document.getElementById(`feedback-${qIdx}`);
+            const q = quizData[qIdx];
+
+            if (selectedOpt === q.correct) {
+                fb.className = 'feedback correct';
+                fb.innerText = `¡Correcto! ${q.exp}`;
+            } else {
+                fb.className = 'feedback incorrect';
+                fb.innerText = `Incorrecto. ${q.exp}`;
+            }
+            fb.style.display = 'block';
+        }
+
+        // INITIALIZATION
+        window.onload = function() {
+            setupInternalMemory();
+            setupExternalMemory();
+            initQuiz();
+        };
+    </script>
+</body>
+</html>
